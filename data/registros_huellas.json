@@ -1,0 +1,30 @@
+[
+  { "cedula": "1", "fecha": "2025-10-24", "hora": "07:58:21", "tipo": "IN" },
+  { "cedula": "1", "fecha": "2025-10-24", "hora": "17:05:32", "tipo": "OUT" },
+
+  { "cedula": "2", "fecha": "2025-10-24", "hora": "08:10:10", "tipo": "IN" },
+  { "cedula": "2", "fecha": "2025-10-24", "hora": "12:03:50", "tipo": "OUT" },
+
+  { "cedula": "3", "fecha": "2025-10-24", "hora": "09:05:00", "tipo": "IN" },
+  { "cedula": "3", "fecha": "2025-10-24", "hora": "17:00:10", "tipo": "OUT" },
+
+  { "cedula": "4", "fecha": "2025-10-24", "hora": "07:50:00", "tipo": "IN" },
+  { "cedula": "4", "fecha": "2025-10-24", "hora": "16:59:00", "tipo": "OUT" },
+
+  { "cedula": "5", "fecha": "2025-10-24", "hora": "08:03:00", "tipo": "IN" },
+  { "cedula": "5", "fecha": "2025-10-24", "hora": "17:05:00", "tipo": "OUT" },
+
+  { "cedula": "6", "fecha": "2025-10-24", "hora": "08:00:00", "tipo": "IN" },
+  { "cedula": "6", "fecha": "2025-10-24", "hora": "12:30:00", "tipo": "OUT" },
+
+  { "cedula": "7", "fecha": "2025-10-24", "hora": "07:55:10", "tipo": "IN" },
+  { "cedula": "7", "fecha": "2025-10-24", "hora": "17:10:00", "tipo": "OUT" },
+
+  { "cedula": "8", "fecha": "2025-10-24", "hora": "08:07:30", "tipo": "IN" },
+  { "cedula": "8", "fecha": "2025-10-24", "hora": "17:00:00", "tipo": "OUT" },
+
+  { "cedula": "9", "fecha": "2025-10-24", "hora": "07:59:45", "tipo": "IN" },
+  { "cedula": "9", "fecha": "2025-10-24", "hora": "17:02:00", "tipo": "OUT" },
+
+  { "cedula": "10", "fecha": "2025-10-24", "hora": "07:57:00", "tipo": "IN" }
+]
