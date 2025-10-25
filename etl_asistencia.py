@@ -1,13 +1,12 @@
 import json
 import requests
-from pathlib import Path
-from datetime import datetime, time
 import csv
 import logging
 import time as t
+from pathlib import Path
+from datetime import datetime, time
 
-
-# ------------------------- Logger -------------------------
+# logger
 def configurar_logger(fecha=None, carpeta_logs="logs"):
     Path(carpeta_logs).mkdir(parents=True, exist_ok=True)
     if fecha is None:
@@ -29,7 +28,8 @@ def configurar_logger(fecha=None, carpeta_logs="logs"):
     return ruta_log
 
 
-# ------------------------- ETL -------------------------
+# ETL 
+# Extrayendo de API
 def fetch_empleados(api_url="https://jsonplaceholder.typicode.com/users", reintentos=3):
     for intento in range(1, reintentos + 1):
         try:
@@ -47,7 +47,7 @@ def fetch_empleados(api_url="https://jsonplaceholder.typicode.com/users", reinte
                 logging.critical("No se pudo conectar a la API tras varios intentos.")
                 return []
 
-
+#Extrayendo de archivo json local
 def load_registros(file_path="data/registros_huellas.json", fecha=None):
     path = Path(file_path)
     if not path.exists():
@@ -85,7 +85,7 @@ def load_registros(file_path="data/registros_huellas.json", fecha=None):
         logging.error(f"Error al leer el archivo: {e}")
         return []
 
-
+#Transformando la data para generar el informe
 def transformar_datos(empleados, registros):
     resultados = []
 
@@ -152,7 +152,7 @@ def transformar_datos(empleados, registros):
 
     return resultados
 
-
+#load, generando el archivo csv con la informacion
 def cargar_csv(resultados, fecha=None, carpeta_salida="output"):
     Path(carpeta_salida).mkdir(parents=True, exist_ok=True)
     if fecha is None:
@@ -171,6 +171,7 @@ def cargar_csv(resultados, fecha=None, carpeta_salida="output"):
     logging.info(f"Archivo CSV generado: {ruta_archivo}")
     return ruta_archivo
 
+#generando logs de resumen de informe y archivo
 def log_resumen_asistencia(resultados):
     """
     Calcula y genera un resumen de asistencia usando el logger.
@@ -187,9 +188,9 @@ def log_resumen_asistencia(resultados):
     logging.info(f"Incompletos: {incompletos}")
     logging.info("=================================")
 
-# ------------------------- MAIN ETL -------------------------
+# ejecucion del ETL 
 if __name__ == "__main__":
-    # Preguntar fecha al usuario
+    # coloco fecha de asistencia opcional sino entonces toma el dia actual
     fecha_input = input("Ingrese la fecha a procesar (YYYY-MM-DD) o presione Enter para hoy: ").strip()
     if fecha_input:
         try:
@@ -202,15 +203,15 @@ if __name__ == "__main__":
 
     ruta_log = configurar_logger(fecha=fecha_obj)
 
-    # Extract
+    # ejecutando la extraccion
     lista_empleados = fetch_empleados()
     registros = load_registros(fecha=fecha_obj)
 
-    # Transform
+    # transformando los datos tu sabe
     resultados = transformar_datos(lista_empleados, registros)
 
-    # generar resumen
+    # generando el resumen
     log_resumen_asistencia(resultados)
 
-    # Load
+    # load generando el csv
     cargar_csv(resultados, fecha=fecha_obj)
