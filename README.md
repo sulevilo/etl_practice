@@ -1,4 +1,5 @@
 # Proyecto ETL: Reporte Diario de Asistencia
+<img width="1920" height="1020" alt="Captura de pantalla 2025-10-24 224127" src="https://github.com/user-attachments/assets/1e949a26-a298-4056-94a1-0e25fa7f570c" />
 
 ## 1. Descripción del proyecto
 Este proyecto automatiza la generación de reportes diarios de asistencia a partir de registros biométricos. Fue desarrollado para resolver el problema que enfrenta el departamento de Recursos Humanos de **Parcial S.A.S.**, donde actualmente se requiere revisar manualmente los registros de huellas de los empleados para calcular horarios, ausencias, retardos y tiempo trabajado.
@@ -91,7 +92,6 @@ requests
 - **Reporte CSV**: cada empleado con hora de entrada, salida, tiempo trabajado y estado de asistencia.
 - **Logs**: seguimiento de errores, registros incompletos, conexiones a la API y resumen de asistencia.
 
-![Ejemplo de ejecución](images/captura_ejecucion.png)
 <img width="1920" height="1020" alt="captura_ejecucion" src="https://github.com/user-attachments/assets/7b57a535-4771-4f57-9aaf-d1b21b95421b" />
 
 
