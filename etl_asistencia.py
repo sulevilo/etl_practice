@@ -1,26 +1,57 @@
 import json
 import requests
 from pathlib import Path
-import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, time
+import csv
+import logging
+import time as t
 
-def fetch_empleados(api_url="https://jsonplaceholder.typicode.com/users"):
 
-    try:
-        print(f"Conectando a la API: {api_url}")
-        response = requests.get(api_url, timeout=5)
-        response.raise_for_status()  
-        empleados = response.json()  
-        print(f"Datos recibidos: {len(empleados)} empleados encontrados.")
-        return empleados
-    except requests.exceptions.RequestException as e:
-        print("Error al conectar con la API:", e)
-        return []
-    
-def load_registros(file_path="data/registros_huellas.json"): 
+# ------------------------- Logger -------------------------
+def configurar_logger(fecha=None, carpeta_logs="logs"):
+    Path(carpeta_logs).mkdir(parents=True, exist_ok=True)
+    if fecha is None:
+        fecha = datetime.today()
+    fecha_str = fecha.strftime("%Y%m%d_%H%M%S")
+    nombre_archivo = f"log_etl_{fecha_str}.log"
+    ruta_log = Path(carpeta_logs) / nombre_archivo
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(ruta_log, encoding="utf-8"),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("Logger configurado correctamente")
+    return ruta_log
+
+
+# ------------------------- ETL -------------------------
+def fetch_empleados(api_url="https://jsonplaceholder.typicode.com/users", reintentos=3):
+    for intento in range(1, reintentos + 1):
+        try:
+            logging.info(f"Conectando a la API: {api_url} (Intento {intento})")
+            response = requests.get(api_url, timeout=5)
+            response.raise_for_status()
+            empleados = response.json()
+            logging.info(f"Datos recibidos: {len(empleados)} empleados encontrados.")
+            return empleados
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error en intento {intento}: {e}")
+            if intento < reintentos:
+                t.sleep(2)
+            else:
+                logging.critical("No se pudo conectar a la API tras varios intentos.")
+                return []
+
+
+def load_registros(file_path="data/registros_huellas.json", fecha=None):
     path = Path(file_path)
     if not path.exists():
-        print(f"archivo no encontrado: {path}")
+        logging.error(f"Archivo no encontrado: {path}")
         return []
 
     try:
@@ -32,74 +63,77 @@ def load_registros(file_path="data/registros_huellas.json"):
 
         for item in data:
             if all(k in item for k in ['cedula', 'fecha', 'hora', 'tipo']):
-                registros_validos.append(item)
+                item_fecha = datetime.strptime(item["fecha"], "%Y-%m-%d").date()
+                if fecha is None or item_fecha == fecha:
+                    # guardar cédula como entero
+                    registros_validos.append({
+                        "cedula": int(item["cedula"]),
+                        "fecha": item_fecha,
+                        "hora": item["hora"],
+                        "tipo": item["tipo"]
+                    })
             else:
                 registros_erroneos.append(item)
 
-        print(f"registro cargados: {len(registros_validos)} validos, {len(registros_erroneos)} con errores.")
+        logging.info(f"Registros cargados: {len(registros_validos)} válidos, {len(registros_erroneos)} con errores.")
+        for err in registros_erroneos:
+            logging.warning(f"Registro erróneo: {err}")
+
         return registros_validos
 
-    except json.JSONDecodeError:
-        print("error: el archivo no tiene un formato JSON valido.")
-        return []
     except Exception as e:
-        print("error al leer el archivo:", e)
+        logging.error(f"Error al leer el archivo: {e}")
         return []
 
 
 def transformar_datos(empleados, registros):
-    df_registros = pd.DataFrame(registros)
-    df_empleados = pd.DataFrame(empleados)
-
-    df_registros['fecha'] = pd.to_datetime(df_registros['fecha'])
-    df_registros['hora'] = pd.to_datetime(df_registros['hora'], format="%H:%M:%S").dt.time
-
     resultados = []
 
-    for _, emp in df_empleados.iterrows():
-        cedula = emp["id"]
-        nombre = emp["name"]
-        registros_emp = df_registros[df_registros["cedula"] == cedula]
+    # Convertir horas a objetos datetime.time
+    for r in registros:
+        if isinstance(r.get("hora"), str):
+            r["hora"] = datetime.strptime(r["hora"], "%H:%M:%S").time()
 
-        # si el registro esta vacio osea que no asistio
-        if registros_emp.empty:
+    for emp in empleados:
+        cedula = emp["id"]  # mantener entero
+        nombre = emp["name"]
+
+        registros_emp = [r for r in registros if r.get("cedula") == cedula]
+
+        if not registros_emp:
             resultados.append({
                 "cedula": cedula,
                 "nombre": nombre,
-                "hora_entrada": None,
-                "hora_salida": None,
+                "hora_entrada": "",
+                "hora_salida": "",
                 "tiempo_trabajado": "0h 0m",
                 "estado": "NO ASISTIÓ"
             })
             continue
 
-        registros_in = registros_emp[registros_emp["tipo"] == "IN"]
-        registros_out = registros_emp[registros_emp["tipo"] == "OUT"]
+        registros_in = [r for r in registros_emp if r.get("tipo") == "IN"]
+        registros_out = [r for r in registros_emp if r.get("tipo") == "OUT"]
 
-        hora_entrada = registros_in["hora"].min() if not registros_in.empty else None
-        hora_salida = registros_out["hora"].max() if not registros_out.empty else None
+        hora_entrada = min([r["hora"] for r in registros_in], default=None)
+        hora_salida = max([r["hora"] for r in registros_out], default=None)
 
-        # aqui validamos los distintos criterios
         if hora_entrada and hora_salida:
             t_entrada = datetime.combine(datetime.today(), hora_entrada)
             t_salida = datetime.combine(datetime.today(), hora_salida)
             duracion = t_salida - t_entrada
-            horas = duracion.seconds // 3600
-            minutos = (duracion.seconds % 3600) // 60
+            total_minutos = duracion.total_seconds() // 60
+            horas = int(total_minutos // 60)
+            minutos = int(total_minutos % 60)
             tiempo_str = f"{horas}h {minutos}m"
             estado = "ASISTIÓ"
-
-            hora_limite = datetime.strptime("08:00:00", "%H:%M:%S").time()
-            if hora_entrada > hora_limite:
+            if hora_entrada > time(8, 0, 0):
                 estado = "RETARDO"
 
         elif hora_entrada and not hora_salida:
-            # aun en jornada
             tiempo_str = "N/A"
             estado = "EN JORNADA"
 
         elif hora_salida and not hora_entrada:
-            #error o registro incompleto
             tiempo_str = "N/A"
             estado = "INCOMPLETO"
 
@@ -116,23 +150,67 @@ def transformar_datos(empleados, registros):
             "estado": estado
         })
 
-    df_resultado = pd.DataFrame(resultados)
-    return df_resultado
+    return resultados
 
+
+def cargar_csv(resultados, fecha=None, carpeta_salida="output"):
+    Path(carpeta_salida).mkdir(parents=True, exist_ok=True)
+    if fecha is None:
+        fecha = datetime.today()
+    fecha_str = fecha.strftime("%Y%m%d")
+    nombre_archivo = f"reporte_asistencia_{fecha_str}.csv"
+    ruta_archivo = Path(carpeta_salida) / nombre_archivo
+
+    campos = ["cedula", "nombre", "hora_entrada", "hora_salida", "tiempo_trabajado", "estado"]
+
+    with ruta_archivo.open("w", encoding="utf-8", newline="") as f:
+        escritor = csv.DictWriter(f, fieldnames=campos)
+        escritor.writeheader()
+        escritor.writerows(resultados)
+
+    logging.info(f"Archivo CSV generado: {ruta_archivo}")
+    return ruta_archivo
+
+def log_resumen_asistencia(resultados):
+    """
+    Calcula y genera un resumen de asistencia usando el logger.
+    """
+    total_empleados = len(resultados)
+    asistieron = sum(1 for r in resultados if r["estado"] in ["ASISTIÓ", "RETARDO", "EN JORNADA"])
+    no_asistieron = sum(1 for r in resultados if r["estado"] == "NO ASISTIÓ")
+    incompletos = sum(1 for r in resultados if r["estado"] == "INCOMPLETO")
+
+    logging.info("===== RESUMEN DE ASISTENCIA =====")
+    logging.info(f"Total empleados: {total_empleados}")
+    logging.info(f"Asistieron: {asistieron}")
+    logging.info(f"No asistieron: {no_asistieron}")
+    logging.info(f"Incompletos: {incompletos}")
+    logging.info("=================================")
+
+# ------------------------- MAIN ETL -------------------------
 if __name__ == "__main__":
-    
-    lista_empleados = fetch_empleados() #valide que coneccion de appi y carga de json funcionan correctamente
-    """ #valide que coneccion de appi y carga de json funcionan correctamente
-    for emp in lista_empleados[:3]:  #solo muestro los primeros 3 para validar 
-        print(emp)"""
-    #valido que se caruguen los registros correctamente
-    registros = load_registros()
-    """ for r in registros[:5]: #muestro los primeros 5 para validar
-        print(r)  """
-    resultados = transformar_datos(lista_empleados,registros)
-    print(resultados.head(5).to_string(index=False))
+    # Preguntar fecha al usuario
+    fecha_input = input("Ingrese la fecha a procesar (YYYY-MM-DD) o presione Enter para hoy: ").strip()
+    if fecha_input:
+        try:
+            fecha_obj = datetime.strptime(fecha_input, "%Y-%m-%d").date()
+        except ValueError:
+            print("Formato de fecha incorrecto. Se usará la fecha de hoy.")
+            fecha_obj = datetime.today().date()
+    else:
+        fecha_obj = datetime.today().date()
 
+    ruta_log = configurar_logger(fecha=fecha_obj)
 
+    # Extract
+    lista_empleados = fetch_empleados()
+    registros = load_registros(fecha=fecha_obj)
 
+    # Transform
+    resultados = transformar_datos(lista_empleados, registros)
 
+    # generar resumen
+    log_resumen_asistencia(resultados)
 
+    # Load
+    cargar_csv(resultados, fecha=fecha_obj)
